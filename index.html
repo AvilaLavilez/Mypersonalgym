@@ -29,13 +29,46 @@ label{font-size:13px;color:#9ca3af}
 .up{color:#fbbf24;font-weight:700}
 canvas{width:100%;background:#111827;border-radius:8px}
 #timer{font-size:44px;text-align:center;font-weight:700;color:#34d399;margin:8px 0}
+.ab{display:flex;gap:8px;margin-bottom:12px}
+.ab button{flex:1;padding:14px;border-radius:10px;border:2px solid #374151;background:#1f2937;color:#9ca3af;font-size:18px;font-weight:700}
+.ab button.on{border-color:#34d399;color:#34d399}
+.sug{font-size:14px;color:#fbbf24;margin-bottom:8px;text-align:center}
+.prog{height:14px;background:#374151;border-radius:7px;overflow:hidden;margin:6px 0}
+.prog>div{height:100%;background:#34d399;width:0;transition:width .3s}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.tj{background:#1f2937;border-radius:14px;padding:10px 6px 8px;text-align:center;position:relative;transition:all .25s;border:2px solid transparent}
+.tj .ic{height:64px;display:flex;justify-content:center;align-items:center;cursor:pointer}
+.tj .nm{font-size:14px;font-weight:700;margin-top:2px}
+.tj .num{position:absolute;top:6px;left:8px;font-size:12px;color:#9ca3af}
+.tj .go{position:absolute;top:4px;right:4px;background:#374151;border:none;border-radius:8px;color:#34d399;font-size:16px;padding:4px 8px}
+.tj.hecho{opacity:.45;transform:scale(.92);background:#111827;border-color:#34d399}
+.tj.hecho .ic::after{content:'✅';font-size:22px;position:absolute;top:28px;right:calc(50% - 44px)}
+.tj.hecho .nm{text-decoration:line-through}
+.fin{text-align:center;font-size:22px;font-weight:700;color:#34d399;padding:12px}
+.racha{text-align:center;font-size:15px;color:#fbbf24;margin-top:8px}
 </style>
 </head>
 <body>
 <header id="title">💪 Mis Ejercicios</header>
 
+<!-- PÁGINA 0: RUTINA DE HOY -->
+<div class="page on" id="p-rutina">
+  <div class="sug" id="sug"></div>
+  <div class="ab">
+    <button id="bA" onclick="elegirRutina('A')">Rutina A</button>
+    <button id="bB" onclick="elegirRutina('B')">Rutina B</button>
+  </div>
+  <div class="card">
+    <div class="item"><b id="progTxt">0 de 7</b><span class="muted">Toca el ícono al terminar</span></div>
+    <div class="prog"><div id="progBar"></div></div>
+  </div>
+  <div class="grid" id="gridRut"></div>
+  <div class="fin" id="finMsg"></div>
+  <div class="racha" id="racha"></div>
+</div>
+
 <!-- PÁGINA 1: LISTA -->
-<div class="page on" id="p-lista">
+<div class="page" id="p-lista">
   <div id="lista"></div>
   <div class="card">
     <label>Nuevo ejercicio</label>
@@ -101,7 +134,8 @@ canvas{width:100%;background:#111827;border-radius:8px}
 </div>
 
 <div class="tabs">
-  <button id="t-lista" class="on" onclick="ir('lista')">🏋️ Ejercicios</button>
+  <button id="t-rutina" class="on" onclick="ir('rutina')">✅ Hoy</button>
+  <button id="t-lista" onclick="ir('lista')">🏋️ Ejercicios</button>
   <button id="t-stats" onclick="ir('stats')">📈 Estadísticas</button>
 </div>
 
@@ -139,9 +173,11 @@ function importarDatos(inp){
 function ir(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
   document.getElementById('p-'+p).classList.add('on');
+  document.getElementById('t-rutina').classList.toggle('on', p==='rutina');
   document.getElementById('t-lista').classList.toggle('on', p==='lista'||p==='detalle');
   document.getElementById('t-stats').classList.toggle('on', p==='stats');
-  document.getElementById('title').textContent = p==='stats' ? '📈 Estadísticas' : (p==='detalle' ? '💪 ' + datos.ejercicios[actual].nombre : '💪 Mis Ejercicios');
+  document.getElementById('title').textContent = p==='stats' ? '📈 Estadísticas' : (p==='detalle' ? '💪 ' + datos.ejercicios[actual].nombre : (p==='rutina' ? '✅ Rutina de hoy' : '💪 Mis Ejercicios'));
+  if(p==='rutina') pintarRutina();
   if(p==='lista') pintarLista();
   if(p==='stats') pintarStats();
 }
@@ -262,7 +298,152 @@ function dibujar(){
   statTxt.textContent = 'Puntos amarillos = días que subiste el peso.';
 }
 
-pintarLista();
+/* ===== RUTINA DE HOY ===== */
+/* Dibujos de palitos: cada uno es un SVG de 64x64. L = estilo de línea. */
+const L = 'fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"';
+const G = 'fill="none" stroke="#9ca3af" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"';
+const H = '<circle cx="{x}" cy="{y}" r="5" fill="#34d399"/>';
+function cab(x,y){ return H.replace('{x}',x).replace('{y}',y); }
+function svg(c){ return '<svg viewBox="0 0 64 64" width="64" height="64">'+c+'</svg>'; }
+
+const DIB = {
+  /* Acostado en banco empujando la barra hacia arriba */
+  banca: svg('<path '+G+' d="M6 46H52M12 46V54M46 46V54"/>'+cab(14,40)+'<path '+L+' d="M20 41H40L48 50M40 41L46 33V14"/><path '+G+' d="M30 14H62M32 10V18M60 10V18"/>'),
+  /* De pie, barra sobre la cabeza */
+  militar: svg(cab(32,24)+'<path '+L+' d="M32 31V46M32 46L24 60M32 46L40 60M32 34L20 28L20 12M32 34L44 28L44 12"/><path '+G+' d="M8 10H56M10 6V14M54 6V14"/>'),
+  /* En paralelas, cuerpo suspendido con piernas dobladas */
+  fondos: svg('<path '+G+' d="M4 30H22M42 30H60M4 30V58M60 30V58"/>'+cab(32,10)+'<path '+L+' d="M32 17V38M32 22L22 30M32 22L42 30M32 38L26 50M32 38L38 50"/>'),
+  /* Sentado en el suelo girando con una mancuerna */
+  core: svg(cab(26,16)+'<path '+L+' d="M26 23L32 42H50M30 30L44 36"/><path '+G+' d="M40 30H52M42 26V34M50 26V34"/><path '+L+' d="M32 42L40 52H56"/>'),
+  /* Inclinado agarrando la barra del suelo */
+  muerto: svg(cab(44,16)+'<path '+L+' d="M42 22L26 36L30 54M26 36L18 54M40 26L36 44"/><path '+G+' d="M20 56H60M22 50V62M58 50V62"/>'),
+  /* Sentado en máquina, pierna estirada contra el rodillo */
+  extens: svg('<path '+G+' d="M8 20V50H26M8 34H20"/>'+cab(18,14)+'<path '+L+' d="M18 22V42H38L56 38"/><path '+G+' d="M52 32L58 44"/>'),
+  /* Espalda en banco, cadera arriba con barra */
+  hip: svg('<path '+G+' d="M4 40H20M10 40V52"/>'+cab(14,32)+'<path '+L+' d="M18 36L34 30L46 42L46 56M34 30L52 38"/><path '+G+' d="M30 22H58M32 18V26M56 18V26"/>'),
+  /* Colgado de la barra, brazos estirados */
+  domi: svg('<path '+G+' d="M6 8H58"/>'+cab(32,22)+'<path '+L+' d="M20 8L26 20L32 29L38 20L44 8M32 29V46M32 46L26 58M32 46L38 58"/>'),
+  /* Inclinado jalando la barra hacia el torso */
+  remo: svg(cab(18,18)+'<path '+L+' d="M22 23L40 34L36 56M22 28L34 38M40 34L48 56"/><path '+G+' d="M24 40H44M26 36V44M42 36V44"/>'),
+  /* De pie, jalando la polea hacia abajo */
+  tricep: svg('<path '+G+' d="M44 4V16M44 10H34"/>'+cab(30,14)+'<path '+L+' d="M30 21V40M30 40L22 58M30 40L38 58M30 26L40 32L38 46"/>'),
+  /* De pie, brazos abiertos con mancuernas a los lados */
+  lateral: svg(cab(32,12)+'<path '+L+' d="M32 19V40M32 40L24 58M32 40L40 58M32 24L14 24M32 24L50 24"/><path '+G+' d="M8 20V28M20 20V28M44 20V28M56 20V28"/>'),
+  /* En cuclillas con la barra sobre los hombros */
+  sentadilla: svg('<path '+G+' d="M6 18H58M8 14V22M56 14V22"/>'+cab(32,10)+'<path '+L+' d="M32 17V34L20 42L22 58M32 34L44 42L42 58"/>'),
+  /* Boca abajo en máquina, doblando la pierna */
+  curl: svg('<path '+G+' d="M4 40H34M10 40V52M28 40V52"/>'+cab(10,32)+'<path '+L+' d="M16 36H34L48 36L52 20"/><path '+G+' d="M50 14L58 24"/>'),
+  /* De puntillas, talones arriba, peso en los hombros */
+  talones: svg(cab(32,10)+'<path '+L+' d="M32 17V42M32 42V54M32 54L28 60M26 24L38 24"/><path '+G+' d="M10 62H54M20 60H44"/>')
+};
+
+function img(archivo, respaldo){
+  return '<img src="'+archivo+'" alt="" style="width:64px;height:64px;object-fit:contain" onerror="this.outerHTML=\''+respaldo.replace(/"/g,'&quot;').replace(/'/g,'&#39;')+'\'">';
+}
+
+const RUTINAS = {
+  A: [
+    {n:'Press de banca', i:img('presdebanca.jpg', DIB.banca)},
+    {n:'Press militar', i:img('presmilitar.jpg', DIB.militar)},
+    {n:'Fondos', i:img('fondos.jpg', DIB.fondos)},
+    {n:'Curl con mancuernas inclinado', i:img('curlconmancuernas.jpg', DIB.core)},
+    {n:'Peso muerto', i:img('pesomuerto.jpg', DIB.muerto)},
+    {n:'Extensiones en máquina', i:img('extensiones.jpg', DIB.extens)},
+    {n:'Hip thrust', i:img('hipthrust.jpg', DIB.hip)}
+  ],
+  B: [
+    {n:'Dominadas', i:img('dominadas.jpg', DIB.domi)},
+    {n:'Remo', i:img('remo.jpg', DIB.remo)},
+    {n:'Extensión de tríceps en polea', i:img('triceps.jpg', DIB.tricep)},
+    {n:'Elevaciones laterales', i:img('laterales.jpg', DIB.lateral)},
+    {n:'Sentadilla', i:img('sentadillas.jpg', DIB.sentadilla)},
+    {n:'Curl femoral acostado', i:img('curlfemorales.jpg', DIB.curl)},
+    {n:'Elevación de talones', i:img('talones.jpg', DIB.talones)}
+  ]
+};
+
+function hoyStr(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+function lunesStr(){ const d=new Date(); const dia=(d.getDay()+6)%7; d.setDate(d.getDate()-dia); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+
+let rut = JSON.parse(localStorage.getItem('gymRutina') || '{}');
+function guardarRut(){ localStorage.setItem('gymRutina', JSON.stringify(rut)); }
+
+function rutinaSugerida(){
+  const d = new Date().getDay(); /* 0 dom ... 6 sab */
+  if(d===1||d===4) return 'A';
+  if(d===2||d===5) return 'B';
+  return null;
+}
+
+function prepararRutina(){
+  if(rut.dia !== hoyStr()){
+    rut.dia = hoyStr();
+    rut.hechos = {};
+    rut.sel = rutinaSugerida() || rut.sel || 'A';
+    rut.contado = false;
+  }
+  if(!rut.sel) rut.sel = 'A';
+  if(!rut.semanas) rut.semanas = {};
+  guardarRut();
+}
+
+function elegirRutina(r){ rut.sel = r; rut.hechos = {}; rut.contado = false; guardarRut(); pintarRutina(); }
+
+function marcar(i){
+  const k = rut.sel + i;
+  if(rut.hechos[k]) delete rut.hechos[k]; else rut.hechos[k] = true;
+  const lista = RUTINAS[rut.sel];
+  const todos = lista.every((x,j)=>rut.hechos[rut.sel+j]);
+  if(todos && !rut.contado){
+    rut.contado = true;
+    const sem = lunesStr();
+    rut.semanas[sem] = (rut.semanas[sem]||0) + 1;
+    if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  }
+  guardarRut(); pintarRutina();
+}
+
+function irRegistro(nombre){
+  let idx = datos.ejercicios.findIndex(e=>e.nombre.toLowerCase()===nombre.toLowerCase());
+  if(idx<0){ datos.ejercicios.push({nombre:nombre, sesiones:[]}); idx = datos.ejercicios.length-1; guardar(); }
+  abrir(idx);
+}
+
+function calcularRacha(){
+  let sem = new Date(); const dia=(sem.getDay()+6)%7; sem.setDate(sem.getDate()-dia);
+  let racha = 0;
+  const f = d=>d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+  if((rut.semanas[f(sem)]||0) >= 1) racha = 0; /* la semana en curso no rompe la racha */
+  let primera = true;
+  for(let k=0;k<200;k++){
+    const v = rut.semanas[f(sem)]||0;
+    if(v>=4){ racha++; }
+    else if(!primera){ break; }
+    primera = false;
+    sem.setDate(sem.getDate()-7);
+  }
+  return racha;
+}
+
+function pintarRutina(){
+  prepararRutina();
+  const s = rut.sel, lista = RUTINAS[s];
+  bA.classList.toggle('on', s==='A'); bB.classList.toggle('on', s==='B');
+  const sg = rutinaSugerida();
+  const nombres = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  sug.textContent = sg ? ('Hoy es '+nombres[new Date().getDay()]+': te toca la Rutina '+sg) : ('Hoy es '+nombres[new Date().getDay()]+': día de descanso 😴 (puedes entrenar igual)');
+  const hechos = lista.filter((x,j)=>rut.hechos[s+j]).length;
+  progTxt.textContent = hechos+' de '+lista.length;
+  progBar.style.width = (hechos/lista.length*100)+'%';
+  gridRut.innerHTML = lista.map((x,j)=>
+    `<div class="tj ${rut.hechos[s+j]?'hecho':''}"><span class="num">${j+1}</span><button class="go" onclick="irRegistro('${x.n}')">📈</button><div class="ic" onclick="marcar(${j})">${x.i}</div><div class="nm" onclick="marcar(${j})">${x.n}</div></div>`
+  ).join('');
+  finMsg.textContent = (hechos===lista.length) ? '🎉 ¡Rutina completada!' : '';
+  const r = calcularRacha();
+  racha.textContent = r>0 ? ('🔥 Llevas '+r+(r===1?' semana':' semanas')+' completas seguidas') : 'Completa 4 entrenamientos en la semana para empezar tu racha';
+}
+
+pintarRutina();
 </script>
 </body>
 </html>
