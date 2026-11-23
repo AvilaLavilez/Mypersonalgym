@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111827">
+<title>Mi Registro de Gym</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:#111827;color:#f3f4f6;padding-bottom:80px}
+header{padding:16px;background:#1f2937;position:sticky;top:0;z-index:5;font-size:20px;font-weight:700}
+.tabs{display:flex;position:fixed;bottom:0;left:0;right:0;background:#1f2937;border-top:1px solid #374151}
+.tabs button{flex:1;padding:16px;background:none;border:none;color:#9ca3af;font-size:16px}
+.tabs button.on{color:#34d399;font-weight:700}
+.page{display:none;padding:16px}.page.on{display:block}
+.card{background:#1f2937;border-radius:12px;padding:14px;margin-bottom:12px}
+.btn{background:#34d399;color:#064e3b;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:700;width:100%;margin-top:8px}
+.btn.sec{background:#374151;color:#f3f4f6}
+.btn.warn{background:#fbbf24;color:#451a03}
+input,textarea,select{width:100%;padding:12px;margin:6px 0;border-radius:8px;border:1px solid #374151;background:#111827;color:#f3f4f6;font-size:16px}
+label{font-size:13px;color:#9ca3af}
+.row{display:flex;gap:8px}.row>div{flex:1}
+.item{display:flex;justify-content:space-between;align-items:center}
+.big{font-size:28px;font-weight:700;color:#34d399}
+.muted{color:#9ca3af;font-size:14px}
+.star{color:#fbbf24}
+.hist{border-top:1px solid #374151;padding:8px 0;font-size:15px}
+.up{color:#fbbf24;font-weight:700}
+canvas{width:100%;background:#111827;border-radius:8px}
+#timer{font-size:44px;text-align:center;font-weight:700;color:#34d399;margin:8px 0}
+</style>
+</head>
+<body>
+<header id="title">💪 Mis Ejercicios</header>
+
+<!-- PÁGINA 1: LISTA -->
+<div class="page on" id="p-lista">
+  <div id="lista"></div>
+  <div class="card">
+    <label>Nuevo ejercicio</label>
+    <input id="nuevoEj" placeholder="Ej: Press de banca">
+    <button class="btn" onclick="agregarEjercicio()">+ Agregar ejercicio</button>
+  </div>
+</div>
+
+<!-- PÁGINA 2: DETALLE -->
+<div class="page" id="p-detalle">
+  <button class="btn sec" onclick="ir('lista')">← Volver</button>
+  <div class="card">
+    <div class="muted">Peso actual</div>
+    <div class="big" id="pesoActual">--</div>
+    <div class="muted" id="recordTxt"></div>
+  </div>
+  <div class="card">
+    <b>Registrar sesión de hoy</b>
+    <div class="row">
+      <div><label>Peso (lb o kg)</label><input type="number" id="fPeso" inputmode="decimal"></div>
+      <div><label>Reps</label><input type="number" id="fReps" inputmode="numeric"></div>
+      <div><label>Series</label><input type="number" id="fSeries" inputmode="numeric"></div>
+    </div>
+    <label>Esfuerzo (1 = fácil, 10 = al límite)</label>
+    <select id="fEsfuerzo"></select>
+    <label>Notas</label>
+    <textarea id="fNotas" rows="2" placeholder="Ej: me sentí fuerte"></textarea>
+    <button class="btn" onclick="guardarSesion()">Guardar sesión</button>
+    <button class="btn warn" onclick="subirPeso()">⬆ Subir peso</button>
+  </div>
+  <div class="card">
+    <b>Descanso entre series</b>
+    <div id="timer">00:00</div>
+    <div class="row">
+      <button class="btn sec" onclick="iniciarTimer(60)">1 min</button>
+      <button class="btn sec" onclick="iniciarTimer(90)">1:30</button>
+      <button class="btn sec" onclick="iniciarTimer(120)">2 min</button>
+    </div>
+  </div>
+  <div class="card">
+    <b>Historial</b>
+    <div id="historial"></div>
+    <button class="btn sec" onclick="borrarEjercicio()">Borrar este ejercicio</button>
+  </div>
+</div>
+
+<!-- PÁGINA 3: ESTADÍSTICAS -->
+<div class="page" id="p-stats">
+  <div class="card">
+    <label>Elige un ejercicio</label>
+    <select id="statSel" onchange="dibujar()"></select>
+    <canvas id="grafica" width="340" height="220"></canvas>
+    <div class="muted" id="statTxt"></div>
+  </div>
+  <div class="card" id="resumen"></div>
+  <div class="card">
+    <b>Copia de seguridad</b>
+    <div class="muted">Guarda tus datos en un archivo por si se borra el navegador.</div>
+    <button class="btn" onclick="exportarDatos()">Exportar copia</button>
+    <button class="btn sec" onclick="document.getElementById('archivoImp').click()">Importar copia</button>
+    <input type="file" id="archivoImp" accept=".json,application/json" style="display:none" onchange="importarDatos(this)">
+  </div>
+</div>
+
+<div class="tabs">
+  <button id="t-lista" class="on" onclick="ir('lista')">🏋️ Ejercicios</button>
+  <button id="t-stats" onclick="ir('stats')">📈 Estadísticas</button>
+</div>
+
+<script>
+let datos = JSON.parse(localStorage.getItem('gymDatos') || '{"ejercicios":[]}');
+let actual = null, intervalo = null;
+
+function guardar(){ localStorage.setItem('gymDatos', JSON.stringify(datos)); }
+
+function exportarDatos(){
+  const blob = new Blob([JSON.stringify(datos)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gym-respaldo-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  alert('Copia guardada en tu carpeta de Descargas.');
+}
+
+function importarDatos(inp){
+  const f = inp.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const n = JSON.parse(r.result);
+      if(!n.ejercicios) throw 0;
+      if(!confirm('Esto reemplaza los datos actuales con los de la copia. ¿Continuar?')) return;
+      datos = n; guardar(); pintarLista(); pintarStats();
+      alert('Copia restaurada.');
+    }catch(e){ alert('Ese archivo no es una copia válida.'); }
+    inp.value='';
+  };
+  r.readAsText(f);
+}
+
+function ir(p){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
+  document.getElementById('p-'+p).classList.add('on');
+  document.getElementById('t-lista').classList.toggle('on', p==='lista'||p==='detalle');
+  document.getElementById('t-stats').classList.toggle('on', p==='stats');
+  document.getElementById('title').textContent = p==='stats' ? '📈 Estadísticas' : (p==='detalle' ? '💪 ' + datos.ejercicios[actual].nombre : '💪 Mis Ejercicios');
+  if(p==='lista') pintarLista();
+  if(p==='stats') pintarStats();
+}
+
+function agregarEjercicio(){
+  const n = document.getElementById('nuevoEj').value.trim();
+  if(!n) return;
+  datos.ejercicios.push({nombre:n, sesiones:[]});
+  document.getElementById('nuevoEj').value='';
+  guardar(); pintarLista();
+}
+
+function pintarLista(){
+  const d = document.getElementById('lista');
+  if(!datos.ejercicios.length){ d.innerHTML='<div class="card muted">Aún no tienes ejercicios. Agrega el primero abajo.</div>'; return; }
+  d.innerHTML = datos.ejercicios.map((e,i)=>{
+    const u = e.sesiones[e.sesiones.length-1];
+    return `<div class="card item" onclick="abrir(${i})"><div><b>${e.nombre}</b><div class="muted">${u ? 'Último: '+u.peso+' x '+u.reps+' reps x '+u.series+' series' : 'Sin registros'}</div></div><div class="big">${u?u.peso:'--'}</div></div>`;
+  }).join('');
+}
+
+function abrir(i){
+  actual = i;
+  const sel = document.getElementById('fEsfuerzo');
+  if(!sel.options.length){ for(let k=1;k<=10;k++) sel.add(new Option(k,k)); sel.value=7; }
+  const u = datos.ejercicios[i].sesiones.slice(-1)[0];
+  if(u){ fPeso.value=u.peso; fReps.value=u.reps; fSeries.value=u.series; }
+  else { fPeso.value=''; fReps.value=''; fSeries.value=''; }
+  fNotas.value='';
+  pintarDetalle();
+  ir('detalle');
+}
+
+function mejorPeso(e){ return e.sesiones.reduce((m,s)=>Math.max(m,s.peso),0); }
+
+function pintarDetalle(){
+  const e = datos.ejercicios[actual];
+  const u = e.sesiones[e.sesiones.length-1];
+  pesoActual.textContent = u ? u.peso : '--';
+  recordTxt.textContent = e.sesiones.length ? '⭐ Récord personal: ' + mejorPeso(e) : 'Aún sin récord';
+  historial.innerHTML = e.sesiones.length ? e.sesiones.slice().reverse().map(s=>
+    `<div class="hist">${s.fecha} — <b>${s.peso}</b> x ${s.reps} reps x ${s.series} series · esfuerzo ${s.esfuerzo}/10 ${s.subio?'<span class="up">⬆ subió peso</span>':''} ${s.record?'<span class="star">⭐ récord</span>':''}${s.notas?'<div class="muted">'+s.notas+'</div>':''}</div>`
+  ).join('') : '<div class="muted">Sin sesiones todavía.</div>';
+}
+
+function registrar(subio){
+  const e = datos.ejercicios[actual];
+  const peso = parseFloat(fPeso.value), reps = parseInt(fReps.value), series = parseInt(fSeries.value);
+  if(!peso || !reps || !series){ alert('Llena peso, reps y series.'); return false; }
+  const record = peso > mejorPeso(e) && e.sesiones.length>0;
+  e.sesiones.push({fecha:new Date().toLocaleDateString('es'), ts:Date.now(), peso, reps, series, esfuerzo:fEsfuerzo.value, notas:fNotas.value.trim(), subio, record});
+  guardar(); fNotas.value=''; pintarDetalle();
+  if(record) alert('⭐ ¡Nuevo récord personal! ¡Felicidades!');
+  return true;
+}
+
+function guardarSesion(){ registrar(false); }
+
+function subirPeso(){
+  const e = datos.ejercicios[actual];
+  const u = e.sesiones[e.sesiones.length-1];
+  const base = u ? u.peso : 0;
+  const nuevo = prompt('Peso anterior: '+base+'\n¿A cuánto lo subes?', base);
+  if(!nuevo || isNaN(parseFloat(nuevo))) return;
+  fPeso.value = parseFloat(nuevo);
+  registrar(true);
+}
+
+function borrarEjercicio(){
+  if(!confirm('¿Borrar este ejercicio y todo su historial?')) return;
+  datos.ejercicios.splice(actual,1); guardar(); ir('lista');
+}
+
+function iniciarTimer(seg){
+  clearInterval(intervalo);
+  let t = seg;
+  const pintar=()=>{ timer.textContent = String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); };
+  pintar();
+  intervalo = setInterval(()=>{
+    t--; pintar();
+    if(t<=0){ clearInterval(intervalo); timer.textContent='¡Listo!'; if(navigator.vibrate) navigator.vibrate([300,150,300]); }
+  },1000);
+}
+
+function pintarStats(){
+  const s = document.getElementById('statSel');
+  const prev = s.value;
+  s.innerHTML = datos.ejercicios.map((e,i)=>`<option value="${i}">${e.nombre}</option>`).join('');
+  if(prev) s.value = prev;
+  dibujar();
+  resumen.innerHTML = datos.ejercicios.length ? '<b>Resumen</b>' + datos.ejercicios.map(e=>{
+    const n=e.sesiones.length; if(!n) return `<div class="hist">${e.nombre}: sin datos</div>`;
+    const ini=e.sesiones[0].peso, fin=e.sesiones[n-1].peso, subidas=e.sesiones.filter(x=>x.subio).length;
+    return `<div class="hist"><b>${e.nombre}</b><br>Empezaste en ${ini}, ahora ${fin} (${fin-ini>=0?'+':''}${fin-ini}). ${n} sesiones, ${subidas} subidas de peso. ⭐ Récord: ${mejorPeso(e)}</div>`;
+  }).join('') : '';
+}
+
+function dibujar(){
+  const c = document.getElementById('grafica'), g = c.getContext('2d');
+  g.clearRect(0,0,c.width,c.height);
+  const e = datos.ejercicios[document.getElementById('statSel').value];
+  if(!e || e.sesiones.length<1){ statTxt.textContent='Registra sesiones para ver la gráfica.'; return; }
+  const pts = e.sesiones.map(x=>x.peso), W=c.width, H=c.height, pad=30;
+  const mn=Math.min(...pts), mx=Math.max(...pts), rg=(mx-mn)||1;
+  g.strokeStyle='#34d399'; g.lineWidth=3; g.beginPath();
+  pts.forEach((p,i)=>{
+    const x = pts.length===1 ? W/2 : pad + i*(W-2*pad)/(pts.length-1);
+    const y = H-pad - (p-mn)/rg*(H-2*pad);
+    i?g.lineTo(x,y):g.moveTo(x,y);
+  }); g.stroke();
+  pts.forEach((p,i)=>{
+    const x = pts.length===1 ? W/2 : pad + i*(W-2*pad)/(pts.length-1);
+    const y = H-pad - (p-mn)/rg*(H-2*pad);
+    g.fillStyle = e.sesiones[i].subio ? '#fbbf24' : '#34d399';
+    g.beginPath(); g.arc(x,y,5,0,7); g.fill();
+    g.fillStyle='#9ca3af'; g.font='11px sans-serif'; g.fillText(p,x-8,y-10);
+  });
+  statTxt.textContent = 'Puntos amarillos = días que subiste el peso.';
+}
+
+pintarLista();
+</script>
+</body>
+</html>
