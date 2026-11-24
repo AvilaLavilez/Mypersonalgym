@@ -46,6 +46,24 @@ canvas{width:100%;background:#111827;border-radius:8px}
 .tj.hecho .nm{text-decoration:line-through}
 .fin{text-align:center;font-size:22px;font-weight:700;color:#34d399;padding:12px}
 .racha{text-align:center;font-size:15px;color:#fbbf24;margin-top:8px}
+.tj.crono{border-color:#374151}
+.tj.crono.activo{border-color:#34d399}
+.tj.crono .ic{flex-direction:column;font-size:34px;font-weight:700;color:#34d399}
+.tj.crono .nm{font-size:13px;color:#9ca3af}
+.cronoOpc{grid-column:1 / -1;display:none;gap:8px}
+.cronoOpc.on{display:flex}
+.cronoOpc button{flex:1;padding:12px;border-radius:10px;border:none;background:#374151;color:#f3f4f6;font-size:16px;font-weight:700}
+.caras{display:flex;gap:10px;margin:6px 0}
+.caras button{flex:1;padding:10px 4px;border-radius:12px;border:3px solid #374151;background:#111827;font-size:38px;line-height:1.1}
+.caras button small{display:block;font-size:12px;color:#9ca3af;margin-top:2px}
+.caras button.on.c1{border-color:#34d399}
+.caras button.on.c2{border-color:#fbbf24}
+.caras button.on.c3{border-color:#ef4444}
+.caras button.c1 .e{filter:none}
+.busq{margin-bottom:10px}
+.mov{display:flex;gap:6px;align-items:center}
+.mov button{background:#374151;border:none;color:#f3f4f6;border-radius:8px;padding:8px 12px;font-size:16px}
+.delses{background:#374151;border:none;color:#f87171;border-radius:8px;padding:6px 10px;font-size:13px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -63,12 +81,15 @@ canvas{width:100%;background:#111827;border-radius:8px}
     <div class="prog"><div id="progBar"></div></div>
   </div>
   <div class="grid" id="gridRut"></div>
+  <div class="cronoOpc" id="cronoOpc"></div>
   <div class="fin" id="finMsg"></div>
   <div class="racha" id="racha"></div>
 </div>
 
 <!-- PÁGINA 1: LISTA -->
 <div class="page" id="p-lista">
+  <input class="busq" id="busq" placeholder="🔍 Buscar ejercicio..." oninput="pintarLista()">
+  <button class="btn sec" id="btnOrden" onclick="alternarOrden()" style="margin:0 0 10px">↕ Reordenar ejercicios</button>
   <div id="lista"></div>
   <div class="card">
     <label>Nuevo ejercicio</label>
@@ -92,22 +113,19 @@ canvas{width:100%;background:#111827;border-radius:8px}
       <div><label>Reps</label><input type="number" id="fReps" inputmode="numeric"></div>
       <div><label>Series</label><input type="number" id="fSeries" inputmode="numeric"></div>
     </div>
-    <label>Esfuerzo (1 = fácil, 10 = al límite)</label>
-    <select id="fEsfuerzo"></select>
+    <label>¿Cómo se sintió?</label>
+    <div class="caras" id="caras">
+      <button class="c1" onclick="setEsf(1)"><span class="e">🥱</span><small>Muy fácil</small></button>
+      <button class="c2" onclick="setEsf(2)"><span class="e">😐</span><small>Normal</small></button>
+      <button class="c3" onclick="setEsf(3)"><span class="e">🥵</span><small>Al límite</small></button>
+    </div>
+    <input type="hidden" id="fEsfuerzo" value="2">
     <label>Notas</label>
     <textarea id="fNotas" rows="2" placeholder="Ej: me sentí fuerte"></textarea>
     <button class="btn" onclick="guardarSesion()">Guardar sesión</button>
     <button class="btn warn" onclick="subirPeso()">⬆ Subir peso</button>
   </div>
-  <div class="card">
-    <b>Descanso entre series</b>
-    <div id="timer">00:00</div>
-    <div class="row">
-      <button class="btn sec" onclick="iniciarTimer(60)">1 min</button>
-      <button class="btn sec" onclick="iniciarTimer(90)">1:30</button>
-      <button class="btn sec" onclick="iniciarTimer(120)">2 min</button>
-    </div>
-  </div>
+  <!-- el cronómetro ahora vive en la pestaña Hoy -->
   <div class="card">
     <b>Historial</b>
     <div id="historial"></div>
@@ -190,25 +208,64 @@ function agregarEjercicio(){
   guardar(); pintarLista();
 }
 
+let ordenando = false;
+
+function alternarOrden(){
+  ordenando = !ordenando;
+  btnOrden.textContent = ordenando ? '✅ Listo' : '↕ Reordenar ejercicios';
+  pintarLista();
+}
+
+function mover(i, dir){
+  const j = i + dir;
+  if(j<0 || j>=datos.ejercicios.length) return;
+  const t = datos.ejercicios[i]; datos.ejercicios[i] = datos.ejercicios[j]; datos.ejercicios[j] = t;
+  guardar(); pintarLista();
+}
+
+function quitarAcentos(s){ return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+
 function pintarLista(){
   const d = document.getElementById('lista');
   if(!datos.ejercicios.length){ d.innerHTML='<div class="card muted">Aún no tienes ejercicios. Agrega el primero abajo.</div>'; return; }
-  d.innerHTML = datos.ejercicios.map((e,i)=>{
+  const q = quitarAcentos(busq.value.trim());
+  const filas = datos.ejercicios.map((e,i)=>({e,i})).filter(o=>!q || quitarAcentos(o.e.nombre).includes(q));
+  if(!filas.length){ d.innerHTML='<div class="card muted">No hay ejercicios con ese nombre.</div>'; return; }
+  d.innerHTML = filas.map(({e,i})=>{
     const u = e.sesiones[e.sesiones.length-1];
-    return `<div class="card item" onclick="abrir(${i})"><div><b>${e.nombre}</b><div class="muted">${u ? 'Último: '+u.peso+' x '+u.reps+' reps x '+u.series+' series' : 'Sin registros'}</div></div><div class="big">${u?u.peso:'--'}</div></div>`;
+    const der = ordenando
+      ? `<div class="mov"><button onclick="event.stopPropagation();mover(${i},-1)">▲</button><button onclick="event.stopPropagation();mover(${i},1)">▼</button></div>`
+      : `<div class="big">${u?u.peso:'--'}</div>`;
+    return `<div class="card item" ${ordenando?'':`onclick="abrir(${i})"`}><div><b>${e.nombre}</b><div class="muted">${u ? 'Último: '+u.peso+' x '+u.reps+' reps x '+u.series+' series' : 'Sin registros'}</div></div>${der}</div>`;
   }).join('');
+}
+
+function setEsf(n){
+  fEsfuerzo.value = n;
+  document.querySelectorAll('#caras button').forEach((b,k)=>b.classList.toggle('on', k===n-1));
 }
 
 function abrir(i){
   actual = i;
   const sel = document.getElementById('fEsfuerzo');
-  if(!sel.options.length){ for(let k=1;k<=10;k++) sel.add(new Option(k,k)); sel.value=7; }
+  setEsf(2);
   const u = datos.ejercicios[i].sesiones.slice(-1)[0];
   if(u){ fPeso.value=u.peso; fReps.value=u.reps; fSeries.value=u.series; }
   else { fPeso.value=''; fReps.value=''; fSeries.value=''; }
   fNotas.value='';
   pintarDetalle();
   ir('detalle');
+}
+
+function carita(n){
+  n = String(n);
+  if(n==='1') return '🥱';
+  if(n==='3') return '🥵';
+  if(n==='2') return '😐';
+  const v = parseInt(n);
+  if(v<=4) return '🥱';
+  if(v>=8) return '🥵';
+  return '😐';
 }
 
 function mejorPeso(e){ return e.sesiones.reduce((m,s)=>Math.max(m,s.peso),0); }
@@ -219,7 +276,7 @@ function pintarDetalle(){
   pesoActual.textContent = u ? u.peso : '--';
   recordTxt.textContent = e.sesiones.length ? '⭐ Récord personal: ' + mejorPeso(e) : 'Aún sin récord';
   historial.innerHTML = e.sesiones.length ? e.sesiones.slice().reverse().map(s=>
-    `<div class="hist">${s.fecha} — <b>${s.peso}</b> x ${s.reps} reps x ${s.series} series · esfuerzo ${s.esfuerzo}/10 ${s.subio?'<span class="up">⬆ subió peso</span>':''} ${s.record?'<span class="star">⭐ récord</span>':''}${s.notas?'<div class="muted">'+s.notas+'</div>':''}</div>`
+    `<div class="hist">${s.fecha} — <b>${s.peso}</b> x ${s.reps} reps x ${s.series} series · ${carita(s.esfuerzo)} ${s.subio?'<span class="up">⬆ subió peso</span>':''} ${s.record?'<span class="star">⭐ récord</span>':''}${s.notas?'<div class="muted">'+s.notas+'</div>':''}<div><button class="delses" onclick="borrarSesion(${s.ts})">🗑 Borrar esta sesión</button></div></div>`
   ).join('') : '<div class="muted">Sin sesiones todavía.</div>';
 }
 
@@ -234,7 +291,20 @@ function registrar(subio){
   return true;
 }
 
-function guardarSesion(){ registrar(false); }
+function guardarSesion(){
+  const peso = parseFloat(fPeso.value), reps = parseInt(fReps.value), series = parseInt(fSeries.value);
+  if(!peso || !reps || !series){ alert('Llena peso, reps y series.'); return; }
+  const nombres = {1:'Muy fácil',2:'Normal',3:'Al límite'};
+  if(!confirm('¿Guardar esta sesión?\n\nPeso: '+peso+'\nReps: '+reps+'\nSeries: '+series+'\nSensación: '+nombres[fEsfuerzo.value])) return;
+  registrar(false);
+}
+
+function borrarSesion(ts){
+  if(!confirm('¿Borrar solo esta sesión? El ejercicio se queda.')) return;
+  const e = datos.ejercicios[actual];
+  e.sesiones = e.sesiones.filter(s=>s.ts!==ts);
+  guardar(); pintarDetalle();
+}
 
 function subirPeso(){
   const e = datos.ejercicios[actual];
@@ -251,15 +321,62 @@ function borrarEjercicio(){
   datos.ejercicios.splice(actual,1); guardar(); ir('lista');
 }
 
+/* ===== CRONÓMETRO (tarjeta en Hoy) ===== */
+let cronoSeg = parseInt(localStorage.getItem('gymCrono') || '90');
+let cronoRest = 0, cronoInt = null, cronoOpen = false;
+
+function fmt(t){ return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
+
+function pitar(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [0,0.35,0.7].forEach(d=>{
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880; g.gain.value = 0.2;
+      o.start(ctx.currentTime+d); o.stop(ctx.currentTime+d+0.2);
+    });
+  }catch(e){}
+}
+
 function iniciarTimer(seg){
-  clearInterval(intervalo);
-  let t = seg;
-  const pintar=()=>{ timer.textContent = String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); };
-  pintar();
-  intervalo = setInterval(()=>{
-    t--; pintar();
-    if(t<=0){ clearInterval(intervalo); timer.textContent='¡Listo!'; if(navigator.vibrate) navigator.vibrate([300,150,300]); }
+  clearInterval(cronoInt);
+  cronoRest = seg;
+  pintarCrono();
+  cronoInt = setInterval(()=>{
+    cronoRest--;
+    if(cronoRest<=0){
+      clearInterval(cronoInt); cronoInt = null; cronoRest = 0;
+      if(navigator.vibrate) navigator.vibrate([300,150,300]);
+      pitar();
+    }
+    pintarCrono();
   },1000);
+}
+
+function tocarCrono(){
+  if(cronoInt){ clearInterval(cronoInt); cronoInt = null; cronoRest = 0; pintarCrono(); }
+  else iniciarTimer(cronoSeg);
+}
+
+function abrirConfigCrono(ev){ ev.stopPropagation(); cronoOpen = !cronoOpen; pintarCrono(); }
+
+function elegirCrono(seg){
+  cronoSeg = seg; localStorage.setItem('gymCrono', seg);
+  cronoOpen = false; pintarCrono();
+}
+
+function pintarCrono(){
+  const corriendo = !!cronoInt;
+  const opc = [60,90,120].map(s=>`<button onclick="elegirCrono(${s})" style="${s===cronoSeg?'outline:2px solid #34d399':''}">${s===60?'1 min':s===90?'1:30':'2 min'}</button>`).join('');
+  const tarjeta = document.getElementById('tarjetaCrono');
+  if(tarjeta){
+    tarjeta.className = 'tj crono ' + (corriendo?'activo':'');
+    tarjeta.innerHTML = `<button class="go" onclick="abrirConfigCrono(event)">⌛</button><div class="ic" onclick="tocarCrono()">${corriendo?fmt(cronoRest):fmt(cronoSeg)}</div><div class="nm" onclick="tocarCrono()">${corriendo?'Toca para parar':'Descanso · toca para iniciar'}</div>`;
+  }
+  const box = document.getElementById('cronoOpc');
+  box.className = 'cronoOpc ' + (cronoOpen?'on':'');
+  box.innerHTML = opc;
 }
 
 function pintarStats(){
@@ -437,7 +554,8 @@ function pintarRutina(){
   progBar.style.width = (hechos/lista.length*100)+'%';
   gridRut.innerHTML = lista.map((x,j)=>
     `<div class="tj ${rut.hechos[s+j]?'hecho':''}"><span class="num">${j+1}</span><button class="go" onclick="irRegistro('${x.n}')">📈</button><div class="ic" onclick="marcar(${j})">${x.i}</div><div class="nm" onclick="marcar(${j})">${x.n}</div></div>`
-  ).join('');
+  ).join('') + '<div class="tj crono" id="tarjetaCrono"></div>';
+  pintarCrono();
   finMsg.textContent = (hechos===lista.length) ? '🎉 ¡Rutina completada!' : '';
   const r = calcularRacha();
   racha.textContent = r>0 ? ('🔥 Llevas '+r+(r===1?' semana':' semanas')+' completas seguidas') : 'Completa 4 entrenamientos en la semana para empezar tu racha';
